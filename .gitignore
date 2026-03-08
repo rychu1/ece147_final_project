@@ -35,6 +35,7 @@ dmypy.json
 
 # VSCode
 .vscode
+.vs
 
 # PyCharm
 .idea

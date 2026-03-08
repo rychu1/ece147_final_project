@@ -24,7 +24,7 @@ from emg2qwerty.metrics import CharacterErrorRates
 from emg2qwerty.modules import (
     MultiBandRotationInvariantMLP,
     SpectrogramNorm,
-    TDSConvEncoder,
+    TDSConvBiLSTMEncoder,
 )
 from emg2qwerty.transforms import Transform
 
