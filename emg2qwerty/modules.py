@@ -278,3 +278,65 @@ class TDSConvEncoder(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.tds_conv_blocks(inputs)  # (T, N, num_features)
+
+class TDSConvBiLSTMEncoder(nn.Module):
+    """Hybrid TDS-CNN + Bidirectional LSTM encoder.
+
+    The TDS conv blocks act as a local feature extractor, learning the
+    shape of muscle activation patterns at each timestep. The BiLSTM
+    then operates on those features to capture long-range sequential
+    context — i.e., which sequence of activation patterns corresponds
+    to which keystroke.
+
+    Forward and backward LSTM outputs are concatenated at each timestep,
+    then projected back to num_features so the downstream classification
+    head does not need to change.
+
+    Args:
+        num_features (int): Feature dimension throughout the model.
+            Must equal NUM_BANDS * mlp_features[-1] from the front-end.
+        block_channels (list[int]): Channel sizes for TDS conv blocks.
+            Each value must evenly divide num_features.
+        kernel_width (int): Temporal kernel size for TDS conv blocks.
+        hidden_size (int): Hidden size per LSTM direction. The BiLSTM
+            produces hidden_size * 2 before projection. (default: 256)
+        num_lstm_layers (int): Number of stacked BiLSTM layers. (default: 2)
+        dropout (float): Dropout applied between LSTM layers when
+            num_lstm_layers > 1. (default: 0.3)
+    """
+
+    def __init__(
+        self,
+        num_features: int,
+        block_channels: Sequence[int] = (24, 24, 24, 24),
+        kernel_width: int = 32,
+        hidden_size: int = 256,
+        num_lstm_layers: int = 2,
+        dropout: float = 0.3,
+    ) -> None:
+        super().__init__()
+
+        # get CNN features
+        self.cnn_encoder = TDSConvEncoder(num_features, block_channels, kernel_width)
+
+        # BiLSTM
+        # bidirectional=True then output is hidden_size * 2 bc back/forward
+        self.lstm = nn.LSTM(
+            input_size=num_features,
+            hidden_size=hidden_size,
+            num_layers=num_lstm_layers,
+            dropout=dropout if num_lstm_layers > 1 else 0.0,
+            bidirectional=True,
+            batch_first=False,  
+        )
+
+        # Project hidden_size * 2 back to num_features for the classification head
+        self.proj = nn.Linear(hidden_size * 2, num_features)
+        self.layer_norm = nn.LayerNorm(num_features)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        # input (T, N, num_features)
+        x = self.cnn_encoder(inputs)   # (T', N, num_features)
+        x, _ = self.lstm(x)            # (T', N, hidden_size * 2)
+        x = self.proj(x)               # (T', N, num_features)
+        return self.layer_norm(x)      # (T', N, num_features)
