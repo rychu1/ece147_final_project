@@ -278,3 +278,25 @@ class TDSConvEncoder(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.tds_conv_blocks(inputs)  # (T, N, num_features)
+
+class BidirectionalGRUWrapper(nn.Module):
+    """
+    Wraps an nn.GRU to extract just the output tensor, discarding the 
+    hidden state tensor (h_n). This allows it to be used directly 
+    inside an nn.Sequential block.
+    """
+    def __init__(self, input_size: int, hidden_size: int, num_layers: int, dropout: float) -> None:
+        super().__init__()
+        self.rnn = nn.GRU(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout if num_layers > 1 else 0.0,
+            bidirectional=True,
+        )
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        # inputs shape: (T, N, Features)
+        # GRU returns: (output, h_n)
+        output, _ = self.rnn(inputs)
+        return output
