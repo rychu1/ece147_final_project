@@ -1,6 +1,6 @@
 defaults:
   - user: single_user
-  - transforms: log_spectrogram
+  - transforms: log_spectrogram #original: log
   - model: tds_conv_ctc
   - optimizer: adam
   - lr_scheduler: linear_warmup_cosine_annealing
@@ -9,7 +9,7 @@ defaults:
   - _self_
 
 seed: 1501
-batch_size: 32
+batch_size: 64 #32
 num_workers: 4  # Number of workers for dataloading
 train: True  # Whether to train or only run validation and test
 checkpoint: null  # Optional path to checkpoint file
