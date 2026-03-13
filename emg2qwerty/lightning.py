@@ -24,7 +24,7 @@ from emg2qwerty.metrics import CharacterErrorRates
 from emg2qwerty.modules import (
     MultiBandRotationInvariantMLP,
     SpectrogramNorm,
-    TDSConvEncoder,
+    TDSConvBiLSTMEncoder,
 )
 from emg2qwerty.transforms import Transform
 
@@ -138,6 +138,16 @@ class WindowedEMGDataModule(pl.LightningDataModule):
 
 
 class TDSConvCTCModule(pl.LightningModule):
+    """Lightning module for the TDS-CNN + BiLSTM hybrid model with CTC loss.
+
+    Architecture:
+        1. SpectrogramNorm       
+        2. MultiBandRotationInvariantMLP 
+        3. Flatten               
+        4. TDSConvBiLSTMEncoder  — TDS CNN front-end followed by BiLSTM back-end
+        5. Linear + LogSoftmax   — classification 
+    """
+
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
 
@@ -150,6 +160,9 @@ class TDSConvCTCModule(pl.LightningModule):
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
+        hidden_size: int = 256,
+        num_lstm_layers: int = 2,
+        lstm_dropout: float = 0.3,
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
@@ -169,10 +182,13 @@ class TDSConvCTCModule(pl.LightningModule):
             ),
             # (T, N, num_features)
             nn.Flatten(start_dim=2),
-            TDSConvEncoder(
+            TDSConvBiLSTMEncoder(
                 num_features=num_features,
                 block_channels=block_channels,
                 kernel_width=kernel_width,
+                hidden_size=hidden_size,
+                num_lstm_layers=num_lstm_layers,
+                dropout=lstm_dropout,
             ),
             # (T, N, num_classes)
             nn.Linear(num_features, charset().num_classes),
